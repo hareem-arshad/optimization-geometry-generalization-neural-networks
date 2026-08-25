@@ -1,132 +1,126 @@
 # Optimization Geometry and Generalization in Neural Networks
 
-A Computational Study of Optimizer Dynamics and Local Loss Curvature
-
-**Type:** Independent research project
-**Tools:** Python, PyTorch, NumPy, SciPy, scikit-learn, Matplotlib, Pandas
-**Dataset:** UCI Breast Cancer Wisconsin Diagnostic (WDBC)
-https://uci-ics-mlr-prod.aws.uci.edu/dataset/17/breast%2Bcancer%2Bwisconsin%2Bdiagnostic  
-Wolberg, W., Mangasarian, O., Street, N., & Street, W. (1993). Breast Cancer Wisconsin (Diagnostic) [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5DW2B.
-
+*A Computational Study of Optimizer Dynamics and Local Loss Curvature*
 
 ---
 
-## 1. Overview
+## 1. Introduction
 
-This project asks whether different neural-network optimizers converge to solutions with different local loss-landscape curvature, and whether that curvature is associated with generalization:
+Neural networks are trained by minimizing a loss function using an optimizer, and in practice the choice of optimizer is treated almost like a hyperparameter: people pick SGD, Adam, or something else, based on habit or convenience, without always thinking about what that choice does to the shape of the solution the network ends up at. But the choice of optimizer does not just affect how fast training converges. It also affects where in parameter space the training process ends up, and different points in parameter space can have very different local geometry, even when they all achieve close to zero training loss.
 
-```
-Optimizer  ->  Optimization Dynamics  ->  Local Loss Geometry  ->  Generalization
-```
+This matters because one of the more persistent ideas in deep learning research is that the local geometry of a solution, in particular how "sharp" or "flat" it is, might explain why some trained networks generalize better than others. The intuition, going back to Hochreiter and Schmidhuber and revived more recently by Keskar et al. (2017), is that flat minima sit in wide, low-loss basins, so small perturbations to the parameters (which is roughly what happens when you evaluate on new data drawn from a slightly different empirical distribution) do not increase the loss much. Sharp minima, by contrast, sit in narrow basins, so the same kind of perturbation can increase the loss a lot. If this intuition is correct, then optimizers that are biased toward flatter regions should produce models that generalize better.
 
-Three optimizers, SGD, Adam, and L-BFGS, are trained on an identical, fixed MLP (30 -> 32 -> 16 -> 1) using an identical, fixed, leakage-free WDBC train/val/test split. After training, local curvature at each solution is estimated using the largest Hessian eigenvalue (lambda_max). This is computed with Hessian-vector products (Pearlmutter's trick) and power iteration, so the full Hessian is never formed explicitly.
+This idea has been influential, but it is also contested. Dinh et al. (2017) showed that flatness, at least under some natural definitions, is not even a well-defined property of a network's function, because you can reparameterize a ReLU network to make an existing solution look arbitrarily sharper or flatter without changing what the network actually computes. Kaur et al. (2022) later showed empirically that the largest Hessian eigenvalue, one of the most common numerical measures of sharpness, can be decoupled from generalization performance by changing batch size and learning rate together. So the honest state of the field is that sharpness and generalization are related in some settings and not others, and it is not fully understood when the relationship holds.
 
-## 2. Research Questions and Hypotheses
+This project is a small, controlled experiment on that question. We ask:
 
-- **RQ1 / H1.** Do SGD, Adam, and L-BFGS exhibit measurably different optimization dynamics? Tested in Experiment 1.
-- **RQ2 / H2.** Do they converge to solutions with different local curvature? Tested in Experiment 3.
-- **RQ3 / H3.** Is local curvature associated with the generalization gap? Tested in Experiment 4.
+**Do different optimization algorithms converge to neural network solutions with different local loss curvature, and is that curvature associated with generalization?**
 
-Per the original project plan, the project is considered successful even if H2 or H3 is not supported. Honest reporting of weak, inconsistent, or null findings is treated as a valid outcome, not a failure.
+We compare three optimizers, SGD, Adam, and L-BFGS, on the same architecture, the same dataset, and the same fixed data split, and estimate the local curvature of each converged solution using the largest eigenvalue of the loss Hessian. We then ask whether that curvature is associated with the gap between training and test performance. The Wisconsin Diagnostic Breast Cancer dataset (WDBC) is used here purely as a small, well-behaved binary classification testbed. This is not a clinical study and no claims are made about diagnostic performance.
 
-## 3. Headline Result
+## 2. Mathematical Background
 
-Full details are in `report/`. Summary, based on 5 seeds x 3 optimizers (15 runs):
+**Gradient.** For a loss function L(theta) over model parameters theta, the gradient nabla_theta L is the vector of first-order partial derivatives. It points in the direction of steepest increase of the loss, and its norm, ||nabla_theta L||, gives a simple measure of how far the current parameters are from a stationary point (where the gradient is zero).
 
-- **H1: supported.** SGD, Adam, and L-BFGS show clearly different optimization trajectories. SGD and Adam decay gradually over 500 steps; L-BFGS converges in around 20 steps through quasi-Newton updates.
-- **H2: supported.** lambda_max differs by roughly three orders of magnitude across optimizers (SGD around 0.30, Adam around 0.014, L-BFGS around 0.0001), and this difference is consistent across seeds.
-- **H3: not robustly supported.** There is a strong pooled correlation between lambda_max and the loss-based generalization gap (Spearman r about -0.81, p < 0.001). But this correlation is driven mostly by differences between optimizers rather than a consistent relationship within each optimizer. The within-optimizer correlations are inconsistent in sign and mostly not significant. The effect also weakens a lot when the generalization gap is measured by accuracy instead of loss. Taken together, this is evidence against a simple, measurement-invariant sharpness-generalization relationship, and it lines up with cautions raised by Dinh et al. (2017) and Kaur et al. (2022).
+**Hessian.** The Hessian H(theta) is the matrix of second-order partial derivatives of the loss with respect to the parameters. It describes the local curvature of the loss surface around theta: if you move a small step in some direction v, the change in loss to second order is approximately v^T (nabla L) + 0.5 v^T H v. A large positive quadratic term in some direction means the loss increases sharply if you move that way. A small quadratic term means the loss is nearly flat in that direction.
 
-## 4. Repository Structure
+**Eigenvalues and the largest Hessian eigenvalue.** The eigenvalues of H tell you the curvature along each of its eigenvector directions. The largest eigenvalue, lambda_max(H), corresponds to the direction of steepest curvature at that point, the direction in which the loss increases fastest for a small step. lambda_max is one of the most commonly used scalar summaries of "sharpness" in the literature (Keskar et al. 2017, Yao et al. 2020), because it is a single number that captures the worst-case local curvature, and because it can be estimated without ever forming the full Hessian matrix, which for a neural network with even a few thousand parameters is far too large to store directly.
 
-```
-optimization-geometry/
-├── README.md
-├── requirements.txt
-├── LICENSE
-├── data/
-│   └── README.md              # data provenance notes, no raw file stored
-├── src/
-│   ├── data.py                 # WDBC loading and leakage-free 70/15/15 stratified split
-│   ├── model.py                 # fixed 30->32->16->1 MLP
-│   ├── train.py                  # unified SGD / Adam / L-BFGS training loop with logging
-│   ├── metrics.py                 # loss, accuracy, F1, AUROC, generalization gaps
-│   ├── hessian.py                  # Hessian-vector products and power iteration for lambda_max
-│   └── analysis.py                  # correlation analysis, summary tables
-├── experiments/
-│   ├── run_experiments.py            # runs the full optimizer x seed grid
-│   └── analyze_results.py             # produces all figures and the final results table
-├── notebooks/
-│   └── results_analysis.ipynb          # exploratory analysis, report figures
-├── results/                              # generated: per_run_results.csv, correlation_analysis.json, etc.
-├── figures/                                # generated: figure1-4 PNGs
-└── report/
-    └── Optimization_Geometry_and_Generalization.pdf
-```
+To estimate lambda_max without forming H, we use two facts. First, Pearlmutter's (1994) technique lets you compute the Hessian-vector product Hv for any vector v using two backward passes through the network, without ever writing out H. Second, power iteration is a classical numerical method that finds the largest eigenvalue of a matrix using only repeated matrix-vector products: starting from a random vector, you repeatedly apply H, normalize, and the result converges to the top eigenvector, with the corresponding eigenvalue estimated as the Rayleigh quotient v^T H v. Combining these two ideas, following the approach used in the PyHessian library (Yao et al. 2020), gives an efficient and exact way to estimate lambda_max for a network of any size.
 
-## 5. Setup
+**Local curvature and flatness.** In this report, "sharp" and "flat" refer informally to how large or small lambda_max is at a converged solution. A large lambda_max means there is at least one direction in parameter space where the loss curves upward steeply. A small lambda_max means the loss is comparatively flat in every direction, at least to second order.
 
-```bash
-pip install -r requirements.txt
-```
+**Generalization gap.** The generalization gap is the difference between a model's performance on data it was trained on and its performance on held-out data it has never seen. We report two versions of this gap. The first, and the one emphasized in the plan, is the loss-based gap G = L_test - L_train, the difference in binary cross-entropy loss. The second is an accuracy-based gap, accuracy_train - accuracy_test, which we introduce as a robustness check, since the loss-based gap can be sensitive to how confident a model's wrong predictions are, not just how often it is wrong.
 
-No dataset download is needed. WDBC is loaded directly with `sklearn.datasets.load_breast_cancer()`, which contains the same 569x30 WDBC data, minus an ID column that isn't used anyway.
+## 3. Experimental Methodology
 
-## 6. Running the Experiments
+**Dataset.** We use the UCI Breast Cancer Wisconsin Diagnostic dataset (WDBC), 569 samples with 30 numeric features each, describing characteristics of cell nuclei from breast mass biopsies, with a binary label (benign or malignant). We load it through scikit-learn's built-in copy of the dataset, which is numerically identical to the original UCI release apart from a dropped, non-predictive ID column. WDBC is used here purely as a convenient, well-behaved binary classification problem on which to study optimizer geometry. This is not a clinical modeling exercise, and no conclusions here should be read as claims about diagnostic accuracy or clinical decision-making.
 
-First, sanity-check the individual modules:
+We split the data into training, validation, and test sets in a stratified 70/15/15 split, using a fixed random seed (42) so that every optimizer and every seed uses exactly the same split. Features are standardized (zero mean, unit variance) using statistics computed only from the training set, then applied to validation and test sets, so that no information from validation or test data leaks into preprocessing.
 
-```bash
-cd src
-python data.py     # prints train/val/test split sizes and class balance
-python model.py     # prints model architecture and parameter count
-python train.py     # trains all 3 optimizers for seed 0, prints final losses
-```
+**Model.** All experiments use a single fixed architecture: a multilayer perceptron with layers 30 to 32 to 16 to 1, with ReLU activations after the first two linear layers and a raw logit output (no final sigmoid, since we use a loss that operates directly on logits). This gives roughly 1,600 trainable parameters. The architecture is held fixed across every run; only the optimizer and the random seed used for weight initialization vary.
 
-Then run the full experimental grid, 3 optimizers x 5 seeds, 15 runs total:
+**Optimizers.** We compare three optimizers: stochastic gradient descent with momentum (SGD, learning rate 0.1, momentum 0.9), Adam (learning rate 0.01, default betas), and L-BFGS, a quasi-Newton method that builds an approximation to the inverse Hessian from a short history of past gradients. Because PyTorch's L-BFGS implementation is inherently a full-batch, closure-based optimizer, we run all three optimizers full-batch (using the entire 397-sample training set on every update), rather than mixing full-batch L-BFGS against minibatch SGD and Adam, which would confound the comparison between optimizer identity and batch size.
 
-```bash
-cd experiments
-python run_experiments.py --seeds 0 1 2 3 4
-python analyze_results.py --seeds 0 1 2 3 4
-```
+One methodological detail is worth documenting explicitly, since it affected an early version of this pipeline and is a subtlety of PyTorch's L-BFGS implementation. Each call to `optimizer.step(closure)` for L-BFGS is configured to run up to 20 internal quasi-Newton iterations (`max_iter=20`), each involving its own strong-Wolfe line search, rather than a single iteration per call. Calling `step()` in an outer loop with `max_iter=1` forces the line search to restart from scratch on every call and, in our early testing, caused L-BFGS to stall almost immediately (final training loss around 0.667, barely below the loss of an untrained model at initialization, which is ln(2) is approximately 0.693). Using `max_iter=20` per outer call, with the optimizer's internal history persisting across calls, resolved this and allowed L-BFGS to converge properly. SGD and Adam are trained for 500 full-batch steps; L-BFGS is trained for 20 outer steps (up to 400 internal iterations), which was sufficient for it to converge to near-zero training loss well before the budget was exhausted.
 
-This produces:
-- `results/per_run_results.csv`, one row per optimizer/seed with all metrics
-- `results/training_logs/*.json`, full per-step logs (loss, grad norm, update norm)
-- `results/final_results_table.csv`, mean ± std summary table
-- `results/correlation_analysis.json`, lambda_max vs generalization-gap correlations, both loss-based and accuracy-based, both pooled and within-optimizer
-- `figures/figure1_training_loss.png` through `figure4_lambda_max_vs_gap.png`
+**Seeds.** Each optimizer is run with five different random seeds (0 through 4), controlling the initialization of the network weights, giving 15 training runs in total (3 optimizers times 5 seeds). The train/validation/test split itself does not vary across seeds, only the model initialization does.
 
-For a faster dev run, use fewer seeds, for example `--seeds 0 1 2`.
+**Metrics.** For every trained model we compute, on the training, validation, and test sets separately: binary cross-entropy loss, classification accuracy, F1 score, and AUROC. We define the primary generalization gap as G = L_test - L_train, and, as a robustness check, an accuracy-based gap defined as accuracy_train - accuracy_test.
 
-## 7. Key Methodological Notes
+**Hessian-vector products and curvature estimation.** For each trained model, we estimate lambda_max(H), the largest eigenvalue of the training-loss Hessian at the final parameters, using Pearlmutter's Hessian-vector product trick combined with power iteration, run for up to 100 iterations or until the estimate changes by less than 1e-6 between iterations, whichever comes first. As a secondary, independent check on curvature, we also compute a perturbation-based sharpness measure: for 10 random unit directions in parameter space, we perturb the trained weights by a small fixed step (epsilon = 0.01) and measure the resulting increase in training loss, then report the mean, maximum, and standard deviation of this increase across directions. Unlike lambda_max, this measure does not rely on any local quadratic approximation, so agreement between the two gives some confidence that lambda_max is not being distorted by numerical artifacts.
 
-- **No data leakage.** `StandardScaler` is fit only on the training split. Validation and test sets are transformed using the training statistics, never re-fit.
-- **Fixed split, varying seed.** The same `random_state=42` train/val/test split is reused for every optimizer and seed combination. Only model initialization varies across seeds.
-- **Full-batch training for all optimizers.** L-BFGS is inherently full-batch and closure-based in PyTorch, so SGD and Adam are also run full-batch here, to avoid confounding optimizer identity with batch size.
-- **L-BFGS step semantics.** Each `optimizer.step(closure)` call uses `max_iter=20` internal quasi-Newton iterations rather than 1, since PyTorch's L-BFGS line search performs poorly when forced to restart from scratch on every outer call.
-- **The Hessian is never explicitly formed.** lambda_max is estimated using Hessian-vector products (Pearlmutter, 1994) and power iteration, the same general approach used by PyHessian (Yao et al., 2020).
-- **Two generalization-gap definitions are reported**, loss-based and accuracy-based, because the loss-based gap can be dominated by prediction confidence rather than correctness. This matters especially for L-BFGS, which drives training loss down to nearly zero.
-- **PCA was considered and rejected**, to keep the analysis pipeline clean and avoid confounding the curvature estimates with a dimensionality-reduction step.
+## 4. Results
 
-## 8. Scope and Limitations
+**Optimization dynamics (Figures 1 and 2).** SGD and Adam show the expected gradual decline in training loss and gradient norm over 500 full-batch steps, with Adam converging noticeably faster and to a lower final loss than SGD (Figure 1, left panel). L-BFGS converges almost immediately: training loss drops from the initial value (about 0.69, consistent with an untrained model making near-random predictions) to below 1e-7 within the first 2 to 3 outer steps, corresponding to roughly 20 to 40 internal quasi-Newton iterations (Figure 1, right panel). Gradient norm shows the same pattern (Figure 2): L-BFGS's gradient norm drops to around 1e-6 almost immediately and then stays essentially flat, while SGD and Adam's gradient norms decline gradually over hundreds of steps. This is a large, qualitative, and highly consistent difference across all five seeds, and it directly supports H1: the three optimizers exhibit clearly different optimization dynamics.
 
-This is a small, intentionally controlled study: one dataset, one architecture, five seeds per optimizer. It is not meant to make general claims about optimizer behavior across architectures or datasets, and sharpness-generalization claims are reported with explicit caveats, following Dinh et al. (2017) and Kaur et al. (2022). See `report/` for the full discussion of limitations.
+**Generalization performance (Figure 3, Table 1).** All three optimizers drive training loss close to zero, so in this setting the loss-based generalization gap is numerically close to the test loss itself. Table 1 summarizes the results across seeds.
 
-## 9. References
-Keskar, N. S., Mudigere, D., Nocedal, J., Smelyanskiy, M., & Tang, P. T. P. (2017). On large-batch training for deep learning: Generalization gap and sharp minima. In *Proceedings of the International Conference on Learning Representations (ICLR)*.
+**Table 1. Final results, mean plus or minus standard deviation across 5 seeds.**
 
-Dinh, L., Pascanu, R., Bengio, S., & Bengio, Y. (2017). Sharp minima can generalize for deep nets. In *Proceedings of the 34th International Conference on Machine Learning (ICML)*, PMLR 70:1019-1028.
+| Optimizer | Test loss | Test F1 | Test AUROC | Loss-based gap | Accuracy-based gap | lambda_max |
+|---|---|---|---|---|---|---|
+| SGD | 0.3272 ± 0.0502 | 0.9718 ± 0.0069 | 0.9766 ± 0.0062 | 0.3266 ± 0.0501 | 0.0209 ± 0.0052 | 0.3039 ± 0.0673 |
+| Adam | 0.4961 ± 0.1322 | 0.9716 ± 0.0070 | 0.9784 ± 0.0072 | 0.4960 ± 0.1322 | 0.0209 ± 0.0052 | 0.0140 ± 0.0031 |
+| L-BFGS | 2.3719 ± 0.8763 | 0.9625 ± 0.0086 | 0.9684 ± 0.0085 | 2.3719 ± 0.8763 | 0.0279 ± 0.0064 | 0.0001 ± 0.0001 |
 
-Jiang, Y., Neyshabur, B., Mobahi, H., Krishnan, D., & Bengio, S. (2020). Fantastic generalization measures and where to find them. In *Proceedings of the International Conference on Learning Representations (ICLR)*.
+Two things stand out. First, all three optimizers achieve similar and reasonably high classification performance on the test set (F1 between 0.96 and 0.97, AUROC between 0.97 and 0.98), so in terms of what the model actually gets right or wrong, the three optimizers are much more similar than the loss numbers alone suggest. Second, L-BFGS has a much larger loss-based gap than SGD or Adam, roughly 7 times larger than SGD's, even though its accuracy-based gap (0.0279) is only modestly larger than SGD's and Adam's (both 0.0209). This gap between what the loss-based and accuracy-based measures say points to a calibration effect: because L-BFGS drives training loss to essentially zero, it is producing very large-magnitude, highly confident logits. When it is then wrong on even a small number of test points, binary cross-entropy penalizes that confident wrongness heavily, inflating the loss-based gap in a way that is not fully reflected in the accuracy-based gap.
 
-Kaur, S., Cohen, J., & Lipton, Z. C. (2022). On the maximum Hessian eigenvalue and generalization. In *Proceedings of Machine Learning Research (PMLR)*, NeurIPS 2022 Workshop track.
+**Local curvature (Table 1, perturbation sharpness).** lambda_max differs by roughly three orders of magnitude between optimizers: SGD converges to solutions with the highest curvature (lambda_max around 0.30), Adam to intermediate curvature (around 0.014), and L-BFGS to almost perfectly flat solutions (around 0.0001). This ordering is consistent across all 5 seeds for each optimizer, with relatively small variance within each group compared to the differences between groups. As an independent check, the perturbation-based sharpness measure (mean loss increase under small random weight perturbations) gives the exact same ordering: SGD has the largest mean sharpness (about 1.6 times 10^-6), Adam intermediate (about 6.7 times 10^-8), and L-BFGS the smallest (about 2.5 times 10^-10). The fact that two independent measures of curvature, one based on the exact Hessian and one based on direct perturbation, agree on the ranking is good evidence that this is a real property of the solutions found by each optimizer, not a numerical artifact of the Hessian estimation procedure. This supports H2: different optimizers converge to solutions with measurably different local curvature.
 
-Wen, K., Ma, T., & Li, Z. (2023). Sharpness minimization algorithms do not only minimize sharpness to achieve better generalization. In *Advances in Neural Information Processing Systems (NeurIPS)*.
+**Geometry versus generalization (Figure 4, correlation analysis).** Pooling all 15 runs together, there is a strong and statistically significant negative correlation between lambda_max and the loss-based generalization gap (Spearman r = -0.81, p < 0.001; Pearson r = -0.52, p = 0.048). At face value this looks like a striking, and actually inverted, result relative to the classic sharp-minima-generalize-worse hypothesis: here, lower curvature (L-BFGS) is associated with a larger gap, and higher curvature (SGD) with a smaller gap.
+
+However, this pooled correlation needs to be interpreted carefully, and this is where the analysis becomes more nuanced. Looking within each optimizer separately, the picture is much less consistent. Within L-BFGS, there is a positive within-group correlation between lambda_max and the loss-based gap (Spearman r = 0.90, p = 0.037), the only within-group result that reaches conventional significance, and its direction is actually opposite to the pooled, between-group correlation. Within SGD and Adam, the within-group correlations are small and not significant (Spearman r around 0.10 for both, p around 0.87 in both cases). This pattern, where the pooled correlation across groups points one way and the within-group relationships are weak, inconsistent, or even reversed, is a classic sign that the pooled correlation is driven mainly by differences between optimizers (which optimizer you use), rather than by a consistent relationship between curvature and generalization that holds independently of which optimizer produced that curvature.
+
+Switching to the accuracy-based generalization gap weakens the picture further. The pooled correlation drops to Spearman r = -0.51 (p = 0.053, no longer significant at the conventional 0.05 threshold) and Pearson r = -0.27 (p = 0.34, clearly not significant). Within-group correlations under the accuracy-based gap are also inconsistent: Adam actually shows a significant negative within-group Pearson correlation (r = -0.94, p = 0.019), the opposite sign from what would support the sharp-minima hypothesis, while SGD and L-BFGS show weak, non-significant relationships in different directions. Taken together, we do not consider H3 to be robustly supported by this data: any single summary correlation number depends heavily on both the choice of generalization measure and on whether you look within or across optimizers, and different reasonable choices give visibly different, sometimes contradictory, answers.
+
+!figure1_training_loss.png
+!figure2_gradient_norm.png
+!figure3_generalization_gap
+!figure4_lambda_max_vs_gap.png
+
+## 5. Discussion
+
+The clearest and most robust finding in this study is that optimizer choice strongly shapes the local geometry of the converged solution, independent of how good that solution is at classifying held-out data. SGD, Adam, and L-BFGS reach solutions whose largest Hessian eigenvalues differ by roughly three orders of magnitude, and this difference is confirmed by an entirely separate, non-quadratic measurement (perturbation-based sharpness), not just by the Hessian-based estimate. This is a clean, low-variance, easily reproducible result (H2).
+
+The relationship between that curvature and generalization is much less clean, and we think this is itself an informative result rather than a failure of the experiment. On the surface, pooling all three optimizers together produces a strong, "clean-looking" correlation between lambda_max and the loss-based generalization gap. If we had only computed that one pooled number and stopped there, this report would tell a much simpler and, we believe, misleading story: that flatter solutions generalize worse in this setting, the opposite of the classical flat-minima hypothesis. But once you separate the pooled correlation from the within-optimizer correlations, and once you check whether the result survives switching from a loss-based to an accuracy-based measure of generalization, that clean story falls apart. The within-optimizer relationships point in different, sometimes opposite, directions depending on which optimizer and which generalization measure you look at, and the one within-group correlation that is statistically significant (L-BFGS, loss-based gap) points in the opposite direction from the pooled result.
+
+We interpret this as most likely reflecting two things rather than a genuine causal link between curvature and generalization. First, optimizer identity is a strong confound: SGD, Adam, and L-BFGS differ in curvature and in generalization gap, but they also differ in many other ways (how they explore parameter space, how quickly they converge, what kind of solutions they tend to find), and the pooled correlation may simply be picking up on "which optimizer was used" rather than "how curved is the solution." Second, the loss-based generalization gap is sensitive to prediction confidence in a way that plain classification accuracy is not, and L-BFGS's tendency to drive training loss to near zero (extremely confident training predictions) appears to inflate its loss-based test gap without a correspondingly large drop in accuracy or F1. This is exactly the kind of measurement sensitivity that Dinh et al. (2017) point to when they argue that many notions of sharpness, and by extension many measured relationships between sharpness and generalization, are not robust to seemingly innocuous choices in how you set up the measurement. Kaur et al. (2022) make a related point empirically, showing that lambda_max's relationship with generalization can be broken by changing training conditions in ways that do not obviously change how "sharp" the solution should be. Our result, that the same underlying dataset, model, and curvature measure gives you a strong effect if pooled naively but a weak and inconsistent effect once you control for optimizer identity and generalization metric, is a small-scale illustration of the same underlying caution.
+
+We want to be explicit that this is not a null result in a discouraging sense. The project stated at the outset that finding no robust link between curvature and generalization would still count as a successful outcome, since the goal was to investigate the relationship honestly, not to confirm it. What we found, that H1 and H2 hold up cleanly and robustly, while H3 depends heavily on analytical choices that a less careful analysis might have glossed over, is a genuine and, we think, useful answer to the research question as originally posed.
+
+## 6. Limitations
+
+This study has a number of limitations that should be kept in mind when interpreting the results.
+
+* **Single dataset.** All experiments use the WDBC dataset only. It is a small, relatively easy, well separated binary classification problem, and results here may not transfer to larger, messier, or more class-imbalanced datasets.
+* **Single architecture.** We use one fixed, small MLP (30 to 32 to 16 to 1, about 1,600 parameters). Curvature and generalization behavior can depend strongly on architecture, depth, and width, and we make no claim that these results generalize to larger or differently structured networks.
+* **Small model and dataset scale.** With roughly 1,600 parameters and 397 training examples, this network is heavily overparameterized relative to more typical modern deep learning settings, but small in absolute terms. The loss landscape of a network this size may behave differently from that of a much larger model.
+* **Exploratory, small-sample computational study.** Each optimizer was run with only 5 seeds. This is enough to see clear, consistent differences in optimization dynamics and curvature (H1, H2), but it is a modest sample size for correlation analysis (H3), and the within-optimizer correlations in particular should be read as suggestive rather than as precise or well-powered estimates.
+* **Correlation is not causation.** Even where we do observe correlations between lambda_max and generalization measures, this study is observational: we did not intervene directly on curvature (for example, by explicitly regularizing for flatness or sharpness, as SAM-style methods do) and then measure the causal effect on generalization. Any correlations reported here should be read as descriptive of what these three optimizers happened to produce, not as evidence of a causal mechanism.
+* **The sharpness-generalization relationship is genuinely contested in the literature**, and this study should not be read as either confirming or refuting the broader hypothesis. Our results are specific to this dataset, this architecture, and these three optimizers, and are consistent with a body of prior work (Dinh et al. 2017, Kaur et al. 2022, Wen et al. 2023) showing that this relationship is fragile and measurement-dependent, rather than a fixed law.
+* **Full-batch training throughout.** To keep the comparison between optimizers fair, we trained all three optimizers full-batch, since L-BFGS is inherently a full-batch method in this implementation. This means our results do not speak to how minibatch noise (which is central to how SGD and Adam are normally used in practice) interacts with curvature and generalization, an interaction that prior work (for example Keskar et al. 2017, on batch size effects) treats as important.
+
+## 7. Conclusion
+
+This project set out to ask whether different optimization algorithms converge to neural network solutions with different local loss curvature, and whether that curvature is associated with generalization. On a small, controlled testbed (a fixed MLP trained on WDBC with SGD, Adam, and L-BFGS across 5 seeds each), we find clear, consistent, and independently verified evidence that optimizer choice strongly shapes local curvature (H1 and H2 are both well supported). We do not find robust evidence that this curvature difference translates into a consistent, measurement-independent relationship with generalization (H3 is not robustly supported): a strong-looking pooled correlation across optimizers largely disappears, and in one case reverses, once you look within each optimizer separately or switch from a loss-based to an accuracy-based measure of the generalization gap. We think this pattern, a real geometric effect of optimizer choice that does not translate cleanly into a generalization effect, is itself a meaningful and honestly reported finding, consistent with a growing body of literature questioning simple sharpness-based explanations of generalization in deep learning.
+
+---
+
+## References
+
+Dinh, L., Pascanu, R., Bengio, S., & Bengio, Y. (2017). Sharp minima can generalize for deep nets. In *Proceedings of the 34th International Conference on Machine Learning (ICML)*, PMLR 70, 1019-1028.
 
 Foret, P., Kleiner, A., Mobahi, H., & Neyshabur, B. (2021). Sharpness-aware minimization for efficiently improving generalization. In *Proceedings of the International Conference on Learning Representations (ICLR)*.
 
-Yao, Z., Gholami, A., Keutzer, K., & Mahoney, M. W. (2020). PyHessian: Neural networks through the lens of the Hessian. In *2020 IEEE International Conference on Big Data (Big Data)*, pp. 581-590.
+Jiang, Y., Neyshabur, B., Mobahi, H., Krishnan, D., & Bengio, S. (2020). Fantastic generalization measures and where to find them. In *Proceedings of the International Conference on Learning Representations (ICLR)*.
+
+Kaur, S., Cohen, J., & Lipton, Z. C. (2023). On the maximum Hessian eigenvalue and generalization. In *Proceedings on "I Can't Believe It's Not Better! Understanding Deep Learning Through Empirical Falsification" at NeurIPS 2022 Workshops*, PMLR 187, 51-65.
+
+Keskar, N. S., Mudigere, D., Nocedal, J., Smelyanskiy, M., & Tang, P. T. P. (2017). On large-batch training for deep learning: Generalization gap and sharp minima. In *Proceedings of the International Conference on Learning Representations (ICLR)*.
 
 Pearlmutter, B. A. (1994). Fast exact multiplication by the Hessian. *Neural Computation*, 6(1), 147-160.
+
+Wen, K., Li, Z., & Ma, T. (2023). Sharpness minimization algorithms do not only minimize sharpness to achieve better generalization. In *Advances in Neural Information Processing Systems (NeurIPS 36)*.
+
+Yao, Z., Gholami, A., Keutzer, K., & Mahoney, M. W. (2020). PyHessian: Neural networks through the lens of the Hessian. In *2020 IEEE International Conference on Big Data (Big Data)*, 581-590.
