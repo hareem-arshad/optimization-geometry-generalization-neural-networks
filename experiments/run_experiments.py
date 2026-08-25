@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 from data import load_wdbc
 from train import train_one_run
-from metrics import evaluate, generalization_gap
+from metrics import evaluate, generalization_gap, accuracy_generalization_gap
 from hessian import power_iteration_lambda_max, perturbation_sharpness
 
 
@@ -79,6 +79,9 @@ def run_all(seeds, results_dir: Path, run_perturbation: bool = True):
             val_metrics = evaluate(model, data.X_val, data.y_val)
             test_metrics = evaluate(model, data.X_test, data.y_test)
             gap = generalization_gap(train_metrics["loss"], test_metrics["loss"])
+            acc_gap = accuracy_generalization_gap(
+                train_metrics["accuracy"], test_metrics["accuracy"]
+            )
 
             # Experiment 3: Hessian geometry (evaluated on training set,
             # consistent with lambda_max being a property of the training
@@ -103,6 +106,7 @@ def run_all(seeds, results_dir: Path, run_perturbation: bool = True):
                 "val_auroc": val_metrics["auroc"],
                 "test_auroc": test_metrics["auroc"],
                 "gen_gap": gap,
+                "acc_gen_gap": acc_gap,
                 "lambda_max": hessian_result["lambda_max"],
                 "lambda_max_n_iters": hessian_result["n_iters"],
                 "lambda_max_converged": hessian_result["converged"],
@@ -126,6 +130,7 @@ def run_all(seeds, results_dir: Path, run_perturbation: bool = True):
                 f"    train_loss={row['train_loss']:.4f} "
                 f"test_loss={row['test_loss']:.4f} "
                 f"gap={row['gen_gap']:.4f} "
+                f"acc_gap={row['acc_gen_gap']:.4f} "
                 f"lambda_max={row['lambda_max']:.4f} "
                 f"(converged={row['lambda_max_converged']}, "
                 f"n_iters={row['lambda_max_n_iters']})"

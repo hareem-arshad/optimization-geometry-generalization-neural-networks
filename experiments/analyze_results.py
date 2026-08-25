@@ -1,5 +1,5 @@
 """
-analyze_experiments.py
+analyze_results.py
 
 Consumes results/per_run_results.csv and results/training_logs/*.json to
 produce exactly the four required figures (Section 15) and the final
@@ -135,21 +135,27 @@ def main(results_dir: Path, figures_dir: Path, seeds):
     figure2_gradient_norm(logs, figures_dir / "figure2_gradient_norm.png")
     figure3_generalization_gap(df, figures_dir / "figure3_generalization_gap.png")
 
-    corr_results = geometry_vs_generalization(df)
+    corr_results = geometry_vs_generalization(df, gap_col="gen_gap")
+    corr_results_acc = geometry_vs_generalization(df, gap_col="acc_gen_gap")
     figure4_lambda_vs_gap(df, corr_results, figures_dir / "figure4_lambda_max_vs_gap.png")
 
     with open(results_dir / "correlation_analysis.json", "w") as f:
-        json.dump(corr_results, f, indent=2, default=float)
+        json.dump(
+            {"loss_based": corr_results, "accuracy_based": corr_results_acc},
+            f, indent=2, default=float,
+        )
 
-    metrics = ["test_loss", "test_f1", "test_auroc", "gen_gap", "lambda_max"]
+    metrics = ["test_loss", "test_f1", "test_auroc", "gen_gap", "acc_gen_gap", "lambda_max"]
     summary = summarize_by_optimizer(df, metrics)
     table = format_mean_std_table(summary, metrics)
     table.to_csv(results_dir / "final_results_table.csv")
 
     print("Final Results Table (mean ± std):")
     print(table.to_string())
-    print("\nCorrelation analysis (pooled):")
+    print("\nCorrelation analysis, loss-based gap (pooled):")
     print(json.dumps(corr_results["pooled"], indent=2))
+    print("\nCorrelation analysis, accuracy-based gap (pooled):")
+    print(json.dumps(corr_results_acc["pooled"], indent=2))
     print(f"\nFigures written to {figures_dir}")
     print(f"Tables written to {results_dir}")
 
