@@ -49,3 +49,20 @@ def evaluate(model, X: torch.Tensor, y: torch.Tensor) -> dict:
 def generalization_gap(train_loss: float, test_loss: float) -> float:
     """G = L_test - L_train, the primary generalization measure used in the plan."""
     return test_loss - train_loss
+
+
+def accuracy_generalization_gap(train_accuracy: float, test_accuracy: float) -> float:
+    """
+    Robustness-check generalization measure: G_acc = accuracy_train - accuracy_test.
+
+    Motivation: the loss-based gap G = L_test - L_train can be dominated by
+    prediction *confidence/calibration* rather than by correctness -- an
+    optimizer that drives training loss to ~0 (very confident on training
+    data) can produce a large loss-based gap even if its test-set accuracy
+    is comparable to other optimizers, simply because a few confidently-wrong
+    test predictions contribute a large BCE penalty. Accuracy is bounded in
+    [0, 1] and insensitive to logit magnitude, so comparing the two gap
+    definitions helps distinguish "genuinely worse generalization" from
+    "confidence/calibration artifact of the loss surface."
+    """
+    return train_accuracy - test_accuracy

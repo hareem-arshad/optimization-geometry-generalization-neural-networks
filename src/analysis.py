@@ -44,10 +44,16 @@ def format_mean_std_table(summary_df: pd.DataFrame, metrics: list) -> pd.DataFra
     return out
 
 
-def geometry_vs_generalization(df: pd.DataFrame) -> dict:
+def geometry_vs_generalization(df: pd.DataFrame, gap_col: str = "gen_gap") -> dict:
     """
-    Correlate lambda_max(H) against the generalization gap G across ALL
+    Correlate lambda_max(H) against a generalization gap column across ALL
     runs (pooled across optimizers and seeds), as specified for Figure 4.
+
+    gap_col defaults to "gen_gap" (loss-based, L_test - L_train), the
+    plan's primary measure. Pass gap_col="acc_gen_gap" to instead check the
+    accuracy-based gap (accuracy_train - accuracy_test) as a robustness
+    check -- useful when the loss-based gap may be dominated by prediction
+    confidence/calibration rather than correctness (see metrics.py).
 
     Spearman is reported as primary (robust to nonlinearity / outliers,
     appropriate given we are not assuming a linear relationship a priori).
@@ -62,11 +68,12 @@ def geometry_vs_generalization(df: pd.DataFrame) -> dict:
     results = {}
 
     lam = df["lambda_max"].values
-    gap = df["gen_gap"].values
+    gap = df[gap_col].values
 
     spearman_r, spearman_p = spearmanr(lam, gap)
     pearson_r, pearson_p = pearsonr(lam, gap)
 
+    results["gap_col"] = gap_col
     results["pooled"] = {
         "n": len(df),
         "spearman_r": spearman_r,
@@ -80,8 +87,17 @@ def geometry_vs_generalization(df: pd.DataFrame) -> dict:
         if len(group) < 3:
             within[opt_name] = {"n": len(group), "note": "too few runs for correlation"}
             continue
-        s_r, s_p = spearmanr(group["lambda_max"], group["gen_gap"])
-        p_r, p_p = pearsonr(group["lambda_max"], group["gen_gap"])
+        # Guard against degenerate (constant) columns within a small group,
+        # e.g. accuracy-based gap can coincide across a few seeds on a small
+        # test set -- correlation is undefined there, not a bug.
+        if group["lambda_max"].nunique() < 2 or group[gap_col].nunique() < 2:
+            within[opt_name] = {
+                "n": len(group),
+                "note": "constant lambda_max or gap within this optimizer; correlation undefined",
+            }
+            continue
+        s_r, s_p = spearmanr(group["lambda_max"], group[gap_col])
+        p_r, p_p = pearsonr(group["lambda_max"], group[gap_col])
         within[opt_name] = {
             "n": len(group),
             "spearman_r": s_r,

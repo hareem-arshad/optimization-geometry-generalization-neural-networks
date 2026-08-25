@@ -32,17 +32,26 @@ OPTIMIZER_CONFIGS = {
     # subject to a sweep).
     "sgd": dict(lr=0.1, momentum=0.9),
     "adam": dict(lr=1e-2, betas=(0.9, 0.999)),
-    "lbfgs": dict(lr=1.0, max_iter=1, history_size=10, line_search_fn="strong_wolfe"),
+    # NOTE on max_iter: PyTorch's LBFGS runs its OWN internal loop of up to
+    # max_iter quasi-Newton iterations (each with its own strong-Wolfe line
+    # search) inside a single .step(closure) call, and its state (approximate
+    # inverse-Hessian history) persists across separate .step() calls. Calling
+    # .step(closure) in an outer Python loop with max_iter=1 forces a fresh,
+    # expensive line search from scratch every single call, which can stall
+    # rather than progress. Using max_iter=20 lets each outer call actually
+    # make several genuine quasi-Newton iterations before we log a data point.
+    "lbfgs": dict(lr=1.0, max_iter=20, history_size=10, line_search_fn="strong_wolfe"),
 }
 
 N_STEPS = {
-    # Full-batch "steps" = epochs here. L-BFGS typically needs far fewer
-    # steps to converge on a small convex-ish problem; SGD/Adam need more.
-    # Using a shared, generous step budget keeps the comparison fair while
-    # letting faster optimizers plateau early (visible in Figure 1).
+    # Full-batch "steps" = epochs here for SGD/Adam.
+    # For L-BFGS, N_STEPS counts OUTER calls to .step(closure), each of which
+    # performs up to max_iter=20 internal quasi-Newton iterations -- so 20
+    # outer calls corresponds to up to ~400 internal L-BFGS iterations, which
+    # is more than enough to converge on this small, smooth full-batch problem.
     "sgd": 500,
     "adam": 500,
-    "lbfgs": 100,
+    "lbfgs": 20,
 }
 
 
@@ -105,6 +114,13 @@ def train_one_run(
 
         if optimizer_name == "lbfgs":
             # LBFGS requires a closure that re-evaluates loss (and grad).
+            # NOTE: with max_iter=20 and strong_wolfe line search, this
+            # closure may be called many times inside a single optimizer.step()
+            # (once per internal iteration/line-search trial). What we log
+            # below reflects the LAST such evaluation, i.e. the model state
+            # actually left in place after this .step() call returns -- this
+            # is documented here since it differs from SGD/Adam's single
+            # pre-step evaluation per logged point.
             def closure():
                 optimizer.zero_grad()
                 logits = model(X_train)
@@ -113,7 +129,6 @@ def train_one_run(
                 return loss
 
             loss = optimizer.step(closure)
-            # grad norm after the step's last internal evaluation
             g_norm = _grad_norm(model)
             train_loss_val = loss.item() if torch.is_tensor(loss) else float(loss)
         else:
