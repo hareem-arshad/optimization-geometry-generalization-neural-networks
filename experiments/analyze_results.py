@@ -44,34 +44,74 @@ def load_training_logs(logs_dir: Path, optimizers, seeds):
 
 
 def figure1_training_loss(logs, out_path: Path):
-    """Figure 1: Training loss vs. iteration, one line per seed, colored by optimizer."""
-    fig, ax = plt.subplots(figsize=(7, 5))
-    for opt, runs in logs.items():
-        for i, run in enumerate(runs):
+    """
+    Figure 1: Training loss vs. iteration, one line per seed, colored by optimizer.
+
+    Two-panel layout: SGD and Adam share a left panel (both logged once per
+    full-batch step, 500 steps), and L-BFGS gets its own right panel (logged
+    once per outer optimizer.step() call, 20 calls, each internally running
+    up to 20 quasi-Newton iterations). These two units are not directly
+    comparable, so plotting them on one shared x-axis compresses L-BFGS's
+    entire trajectory into a few pixels near x=0 and hides its dynamics.
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 5))
+
+    for opt in ["sgd", "adam"]:
+        for i, run in enumerate(logs.get(opt, [])):
             label = OPTIMIZER_LABELS[opt] if i == 0 else None
-            ax.plot(run["train_loss"], color=OPTIMIZER_COLORS[opt], alpha=0.6, label=label)
-    ax.set_xlabel("Training step")
-    ax.set_ylabel("Training loss (BCE)")
-    ax.set_title("Figure 1: Training Loss vs. Iteration")
-    ax.set_yscale("log")
-    ax.legend()
+            ax1.plot(run["train_loss"], color=OPTIMIZER_COLORS[opt], alpha=0.6, label=label)
+    ax1.set_xlabel("Training step (full-batch update)")
+    ax1.set_ylabel("Training loss (BCE)")
+    ax1.set_title("SGD / Adam")
+    ax1.set_yscale("log")
+    ax1.legend()
+
+    for i, run in enumerate(logs.get("lbfgs", [])):
+        label = OPTIMIZER_LABELS["lbfgs"] if i == 0 else None
+        ax2.plot(run["train_loss"], color=OPTIMIZER_COLORS["lbfgs"], alpha=0.6,
+                  marker="o", markersize=3, label=label)
+    ax2.set_xlabel("Outer step (each up to 20 internal L-BFGS iterations)")
+    ax2.set_ylabel("Training loss (BCE)")
+    ax2.set_title("L-BFGS")
+    ax2.set_yscale("log")
+    ax2.legend()
+
+    fig.suptitle("Figure 1: Training Loss vs. Iteration")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
 
 def figure2_gradient_norm(logs, out_path: Path):
-    """Figure 2: Gradient norm vs. iteration, one line per seed, colored by optimizer."""
-    fig, ax = plt.subplots(figsize=(7, 5))
-    for opt, runs in logs.items():
-        for i, run in enumerate(runs):
+    """
+    Figure 2: Gradient norm vs. iteration, one line per seed, colored by optimizer.
+
+    Same two-panel rationale as figure1_training_loss: L-BFGS's outer step
+    unit is not comparable to SGD/Adam's, so it gets its own panel.
+    """
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(11, 5))
+
+    for opt in ["sgd", "adam"]:
+        for i, run in enumerate(logs.get(opt, [])):
             label = OPTIMIZER_LABELS[opt] if i == 0 else None
-            ax.plot(run["grad_norm"], color=OPTIMIZER_COLORS[opt], alpha=0.6, label=label)
-    ax.set_xlabel("Training step")
-    ax.set_ylabel(r"Gradient norm $\|\nabla_\theta L\|_2$")
-    ax.set_title("Figure 2: Gradient Norm vs. Iteration")
-    ax.set_yscale("log")
-    ax.legend()
+            ax1.plot(run["grad_norm"], color=OPTIMIZER_COLORS[opt], alpha=0.6, label=label)
+    ax1.set_xlabel("Training step (full-batch update)")
+    ax1.set_ylabel(r"Gradient norm $\|\nabla_\theta L\|_2$")
+    ax1.set_title("SGD / Adam")
+    ax1.set_yscale("log")
+    ax1.legend()
+
+    for i, run in enumerate(logs.get("lbfgs", [])):
+        label = OPTIMIZER_LABELS["lbfgs"] if i == 0 else None
+        ax2.plot(run["grad_norm"], color=OPTIMIZER_COLORS["lbfgs"], alpha=0.6,
+                  marker="o", markersize=3, label=label)
+    ax2.set_xlabel("Outer step (each up to 20 internal L-BFGS iterations)")
+    ax2.set_ylabel(r"Gradient norm $\|\nabla_\theta L\|_2$")
+    ax2.set_title("L-BFGS")
+    ax2.set_yscale("log")
+    ax2.legend()
+
+    fig.suptitle("Figure 2: Gradient Norm vs. Iteration")
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
