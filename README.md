@@ -2,9 +2,12 @@
 
 A Computational Study of Optimizer Dynamics and Local Loss Curvature
 
-**Type:** Independent research project (48-hour scope)
+**Type:** Independent research project
 **Tools:** Python, PyTorch, NumPy, SciPy, scikit-learn, Matplotlib, Pandas
-**Dataset:** UCI Breast Cancer Wisconsin Diagnostic (WDBC), used purely as an optimization/geometry testbed. This is not a clinical prediction study.
+**Dataset:** UCI Breast Cancer Wisconsin Diagnostic (WDBC)
+https://uci-ics-mlr-prod.aws.uci.edu/dataset/17/breast%2Bcancer%2Bwisconsin%2Bdiagnostic  
+Wolberg, W., Mangasarian, O., Street, N., & Street, W. (1993). Breast Cancer Wisconsin (Diagnostic) [Dataset]. UCI Machine Learning Repository. https://doi.org/10.24432/C5DW2B.
+
 
 ---
 
