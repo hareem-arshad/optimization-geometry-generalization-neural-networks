@@ -74,6 +74,16 @@ However, this pooled correlation needs to be interpreted carefully, and this is 
 
 Switching to the accuracy-based generalization gap weakens the picture further. The pooled correlation drops to Spearman r = -0.51 (p = 0.053, no longer significant at the conventional 0.05 threshold) and Pearson r = -0.27 (p = 0.34, clearly not significant). Within-group correlations under the accuracy-based gap are also inconsistent: Adam actually shows a significant negative within-group Pearson correlation (r = -0.94, p = 0.019), the opposite sign from what would support the sharp-minima hypothesis, while SGD and L-BFGS show weak, non-significant relationships in different directions. Taken together, we do not consider H3 to be robustly supported by this data: any single summary correlation number depends heavily on both the choice of generalization measure and on whether you look within or across optimizers, and different reasonable choices give visibly different, sometimes contradictory, answers.
 
+
+<img width="1650" height="750" alt="figure1_training_loss" src="https://github.com/user-attachments/assets/72f96561-95da-4b6e-83a1-ad0751e4e701" />
+
+<img width="1650" height="750" alt="figure2_gradient_norm" src="https://github.com/user-attachments/assets/83d9c3f6-8786-4b4f-ab88-fdd38a23f49c" />
+
+<img width="900" height="750" alt="figure3_generalization_gap" src="https://github.com/user-attachments/assets/3a2b4eda-775b-4919-85ae-39298a50f182" />
+
+<img width="1050" height="825" alt="figure4_lambda_max_vs_gap" src="https://github.com/user-attachments/assets/7b20cdf7-6690-46b9-a7ab-071857c1885c" />
+
+
 ## 5. Discussion
 
 The clearest and most robust finding in this study is that optimizer choice strongly shapes the local geometry of the converged solution, independent of how good that solution is at classifying held-out data. SGD, Adam, and L-BFGS reach solutions whose largest Hessian eigenvalues differ by roughly three orders of magnitude, and this difference is confirmed by an entirely separate, non-quadratic measurement (perturbation-based sharpness), not just by the Hessian-based estimate. This is a clean, low-variance, easily reproducible result (H2).
