@@ -1,8 +1,5 @@
-# Optimization Geometry and Generalization in Neural Networks
+# A Computational Study of Optimizer Dynamics and Local Loss Curvature using UCI Breast Cancer Wisconsin Diagnostic (WDBC) dataset*
 
-*A Computational Study of Optimizer Dynamics and Local Loss Curvature using UCI Breast Cancer Wisconsin Diagnostic (WDBC) dataset*
-
----
 
 ## 1. Introduction
 
