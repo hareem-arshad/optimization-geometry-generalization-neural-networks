@@ -81,7 +81,7 @@ Switching to the accuracy-based generalization gap weakens the picture further. 
 <img width="1050" height="825" alt="figure4_lambda_max_vs_gap" src="https://github.com/user-attachments/assets/7b20cdf7-6690-46b9-a7ab-071857c1885c" />
 
 
-## 7. Conclusion
+## 5. Conclusion
 
 This project set out to ask whether different optimization algorithms converge to neural network solutions with different local loss curvature, and whether that curvature is associated with generalization. On a small, controlled testbed (a fixed MLP trained on WDBC with SGD, Adam, and L-BFGS across 5 seeds each), we find clear, consistent, and independently verified evidence that optimizer choice strongly shapes local curvature (H1 and H2 are both well supported). We do not find robust evidence that this curvature difference translates into a consistent, measurement-independent relationship with generalization (H3 is not robustly supported): a strong-looking pooled correlation across optimizers largely disappears, and in one case reverses, once you look within each optimizer separately or switch from a loss-based to an accuracy-based measure of the generalization gap. We think this pattern, a real geometric effect of optimizer choice that does not translate cleanly into a generalization effect, is itself a meaningful and honestly reported finding, consistent with a growing body of literature questioning simple sharpness-based explanations of generalization in deep learning.
 
